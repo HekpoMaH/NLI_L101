@@ -22,7 +22,7 @@ t = SnliReader()
 ### Choose datasets here
 train_dataset = t.read('.data/snli/snli_1.0/snli_1.0_train.jsonl')
 val_dataset = t.read('.data/snli/snli_1.0/snli_1.0_dev.jsonl')
-vocab = Vocabulary.from_instances(train_dataset)
+vocab = Vocabulary.from_instances(train_dataset + val_dataset)
 
 ### Choose word embeddings. Note it is always trainable - we use a
 ### backward hook to zero the gradient when we don't optimize
