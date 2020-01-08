@@ -19,3 +19,7 @@ Note that, the class implementing Rocktaschel et al's attention networks
 with which you can control what attention to use. Similarly,
 `RocktaschelEtAlConditionalEncoding` has `use_fastgrnn` flag to switch between
 gating mechanism.
+
+For performing the stress tests use the instructions from
+[here](https://abhilasharavichander.github.io/NLI_StressTest/).  You can use
+`tensorboard` to visualise results from `.serialization_data` folder.
