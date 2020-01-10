@@ -224,8 +224,17 @@ class RocktaschelEtAlAttention(RocktaschelEtAlBase):
             repeated = torch.repeat_interleave(repeated, seq_len, dim=1)
             mask = torch.zeros_like(repeated)
             mask[:, torch.clamp(lengths+1, 1,  seq_len)-1].fill_(1)
+            mask[torch.nonzero((lengths+1)>seq_len).squeeze(), seq_len-1].fill_(0)
             mask = mask.cumsum(dim=1)
             return repeated*(1.-mask)
+
+        def masked_softmax(inp, lengths, seq_len):
+            # inp is batch,seqlen,1
+            mask = torch.zeros_like(inp)
+            mask[:, torch.clamp(lengths+1, 1,  seq_len)-1, 0] = (-1e10)
+            mask[torch.nonzero((lengths+1)>seq_len).squeeze(), seq_len-1, 0] = 0
+            mask = mask.cumsum(dim=1)
+            return torch.softmax(inp+mask, dim=1)
 
         plen, hlen = self.get_lengths(premise, hypothesis)
 
@@ -247,22 +256,23 @@ class RocktaschelEtAlAttention(RocktaschelEtAlBase):
             repeated = create_repeated(self.W_h(h_n), plen, seq_len, prem_lstm.shape[-1])
             
             M = torch.tanh(self.W_y(prem_lstm) + repeated)
-            alpha = torch.softmax(self.w(M), dim=1)
+            alpha = masked_softmax(self.w(M), plen, seq_len)
             r = torch.matmul(torch.transpose(alpha, 1, 2), prem_lstm).squeeze()
 
 
         if self.word_by_word:
             r = torch.zeros(batch_size, self.hidden_dim).cuda()
+            rs = torch.zeros_like(hyp_lstm, device='cuda')
             for t in range(hyp_lstm.shape[1]):
                 h_t = hyp_lstm[:, t, :].unsqueeze(1)
                 repeated = create_repeated(self.W_h(h_t) + self.W_r(r.unsqueeze(1)), plen, seq_len, prem_lstm.shape[-1])
                 M_t = torch.tanh(self.W_y(prem_lstm) + repeated)
-                alpha = torch.softmax(self.w(M_t), dim=1)
+                alpha = masked_softmax(self.w(M_t), plen, seq_len)
                 rhs = torch.tanh(self.W_t(r))
-                r_t = torch.matmul(torch.transpose(alpha, 1, 2), prem_lstm).squeeze() + rhs
-                r = r_t
+                r = torch.matmul(torch.transpose(alpha, 1, 2), prem_lstm).squeeze() + rhs
+                rs[:, t, :] = r
+            r = get_last_tokens(rs, hlen)
             
-
         output = torch.tanh(self.W_p(r) + self.W_x(get_last_tokens(hyp_lstm, hlen)))
         class_probs = self.classifier(output)
 
